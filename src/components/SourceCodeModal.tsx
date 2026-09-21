@@ -162,10 +162,10 @@ export const SourceCodeModal: React.FC<SourceCodeModalProps> = ({ onClose }) => 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-blue-400 text-xs font-bold">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>प्रोजेक्ट की सभी 29 फाइलें जांची गईं (0 मिसिंग, 0 करप्ट)</span>
+                  <span>प्रोजेक्ट व संपूर्ण Android नेटिव कोड जाँचा गया (0 मिसिंग, 0 करप्ट)</span>
                 </div>
                 <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  ~80 KB Binary ZIP
+                  ~618 KB Binary ZIP
                 </span>
               </div>
 

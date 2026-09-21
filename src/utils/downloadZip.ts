@@ -61,7 +61,11 @@ export async function downloadProjectZip(onProgress?: (msg: string) => void): Pr
 
   for (const item of data.files) {
     // Add each file into its proper directory structure
-    zip.file(item.path, item.content);
+    if (item.isBinary) {
+      zip.file(item.path, item.content, { base64: true });
+    } else {
+      zip.file(item.path, item.content);
+    }
     count++;
   }
 

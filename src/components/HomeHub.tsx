@@ -142,11 +142,11 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                   SharePro-SourceCode.zip
                 </h3>
                 <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono border border-emerald-500/30 shrink-0">
-                  Ready (.ZIP)
+                  Android & Web (.ZIP)
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                सभी 29+ फाइल्स व डायरेक्ट्रीज फोल्डर-वार ज़िप में संलग्न हैं (बिना HTML के)
+                संपूर्ण Android Studio प्रोजेक्ट, GitHub Actions वर्कफ़्लो (.yml), व सोर्स कोड शामिल
               </p>
             </div>
           </div>

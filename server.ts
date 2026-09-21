@@ -54,7 +54,7 @@ async function startServer() {
 
   function getProjectFiles(baseDir: string): string[] {
     const results: string[] = [];
-    const ignoredDirs = new Set(['node_modules', 'dist', '.git', '.cache', '.vite']);
+    const ignoredDirs = new Set(['node_modules', 'dist', '.git', '.cache', '.vite', '.gradle', 'build']);
 
     function scan(dir: string, relPrefix: string = '') {
       try {
@@ -88,17 +88,19 @@ async function startServer() {
   app.get('/api/project-files-bundle', (req, res) => {
     try {
       const files = getProjectFiles(process.cwd());
-      const bundle: { path: string; content: string; size: number }[] = [];
+      const bundle: { path: string; content: string; size: number; isBinary?: boolean }[] = [];
 
       for (const relPath of files) {
         if (relPath.endsWith('.zip') || relPath.includes('SharePro-SourceCode')) continue;
         const fullPath = path.join(process.cwd(), relPath);
         if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
-          const content = fs.readFileSync(fullPath, 'utf-8');
+          const isBinary = /\.(png|jpg|jpeg|gif|webp|ico|jar|so)$/i.test(relPath);
+          const raw = fs.readFileSync(fullPath);
           bundle.push({
             path: relPath,
-            content,
-            size: Buffer.byteLength(content, 'utf8'),
+            content: isBinary ? raw.toString('base64') : raw.toString('utf-8'),
+            isBinary,
+            size: raw.length,
           });
         }
       }
