@@ -36,7 +36,7 @@ export async function downloadProjectZip(onProgress?: (msg: string) => void): Pr
           success: true,
           sizeBytes: zipBlob.size,
           sizeFormatted: `${(zipBlob.size / 1024).toFixed(1)} KB`,
-          filesCount: 29,
+          filesCount: 33,
         };
       }
     }
