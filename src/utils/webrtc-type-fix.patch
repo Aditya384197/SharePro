@@ -1,0 +1,19 @@
+--- a/src/utils/webrtc.ts
++++ b/src/utils/webrtc.ts
+@@
+-type SignalingMessage =
++type SignalPayload = {
++  sdp?: RTCSessionDescriptionInit;
++  candidate?: RTCIceCandidateInit;
++};
++
++type SignalingMessage =
+@@
+-  | { kind: 'signal'; signal: { sdp?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit } }
++  | { kind: 'signal'; signal: SignalPayload }
+@@
+-  private async handleSignalMessage(signal: SignalingMessage['signal']) {
++  private async handleSignalMessage(signal: SignalPayload) {
+@@
+-  private async sendSignal(signal: SignalingMessage['signal']) {
++  private async sendSignal(signal: SignalPayload) {

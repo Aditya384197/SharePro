@@ -1,4 +1,11 @@
-import { FileItem } from '../types';
+interface FileItem {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  category: 'app' | 'video' | 'audio' | 'photo' | 'document';
+  description: string;
+}
 
 export const DEMO_FILES: FileItem[] = [
   {
