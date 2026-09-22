@@ -1,53 +1,51 @@
-export interface FileItem {
+export interface TransferFile {
   id: string;
   name: string;
   size: number;
   type: string;
-  category: 'app' | 'video' | 'audio' | 'photo' | 'document' | 'file';
-  lastModified?: number;
-  file?: File;
-  demoUrl?: string;
-  blobUrl?: string;
-  blob?: Blob;
-  isReceived?: boolean;
-  receivedFrom?: string;
-  thumbnail?: string;
-  description?: string;
-}
-
-export interface TransferProgress {
-  fileId: string;
-  name: string;
-  size: number;
-  type: string;
-  transferredBytes: number;
-  percent: number;
-  speedBytesPerSec: number;
-  speedMbps: number;
-  etaSeconds: number;
+  file?: File; // Sender-side source file.
+  blob?: Blob; // Receiver-side completed file when available.
+  progress: number;
+  bytesTransferred: number;
   status: 'pending' | 'transferring' | 'completed' | 'error';
-  blobUrl?: string;
+  error?: string;
+  downloadUrl?: string;
 }
 
-export interface DiscoveredPeer {
+export interface FileMeta {
   id: string;
-  pin: string;
   name: string;
-  avatar: string;
-  deviceType: string;
-  peersCount: number;
-  ageMs: number;
+  size: number;
+  type: string;
 }
 
-export interface TransferRecord {
+export interface ActiveRoom {
+  room: string;
+  deviceName: string;
+  deviceType: string;
+  hasSender: boolean;
+  address?: string;
+  token?: string;
+}
+
+export interface ReceiverReadyInfo {
+  room: string;
+  deviceName: string;
+  deviceType: string;
+  address: string;
+  url: string;
+  token: string;
+}
+
+export interface TransferHistoryItem {
   id: string;
-  fileName: string;
-  fileSize: number;
-  fileType: string;
-  category: string;
   direction: 'sent' | 'received';
   peerName: string;
   timestamp: number;
-  downloadUrl?: string;
-  speedMbps: number;
+  files: {
+    name: string;
+    size: number;
+    type: string;
+  }[];
+  totalSize: number;
 }

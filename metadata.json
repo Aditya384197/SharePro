@@ -1,6 +1,6 @@
 {
   "name": "SharePro",
-  "description": "High-speed peer-to-peer file transfer app. Send and receive apps, videos, music, documents, and photos with QR code scanner pairing and fast transfer speeds without ads.",
+  "description": "Real-time, high-speed peer-to-peer file sharing and transfer application.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

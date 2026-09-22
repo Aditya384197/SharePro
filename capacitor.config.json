@@ -1,5 +1,9 @@
 {
   "appId": "com.sharepro.app",
   "appName": "SharePro",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
 }

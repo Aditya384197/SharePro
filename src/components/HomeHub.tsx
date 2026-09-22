@@ -1,362 +1,165 @@
-import React, { useState } from 'react';
-import {
-  Send,
-  Download,
-  Layers,
-  Film,
-  Music,
-  Image,
-  FileText,
-  FolderOpen,
-  Wifi,
-  ShieldCheck,
-  Zap,
-  Inbox,
-  Play,
-  Eye,
-  ArrowRight,
-  FolderArchive,
-  CheckCircle2,
-  Check,
-} from 'lucide-react';
-import { FileItem } from '../types';
-import { formatBytes } from '../utils/demoData';
-import { downloadProjectZip } from '../utils/downloadZip';
+import React from 'react';
+import { ArrowDownToLine, ArrowUpFromLine, Clock3, FileCheck2, HardDrive, ShieldCheck, Zap } from 'lucide-react';
+import type { Language } from '../utils/i18n.ts';
+import { translations } from '../utils/i18n.ts';
+import type { TransferHistoryItem } from '../types.ts';
 
 interface HomeHubProps {
-  onInitiateSend: (category?: FileItem['category']) => void;
-  onInitiateReceive: () => void;
-  receivedFiles?: FileItem[];
-  onOpenReceived?: () => void;
-  onPreviewFile?: (file: FileItem) => void;
-  onOpenSourceModal?: () => void;
+  lang: Language;
+  onStartSend: () => void;
+  onStartReceive: () => void;
+  onFilesDropped: (files: FileList) => void;
+  history: TransferHistoryItem[];
+  onClearHistory: () => void;
 }
 
 export const HomeHub: React.FC<HomeHubProps> = ({
-  onInitiateSend,
-  onInitiateReceive,
-  receivedFiles = [],
-  onOpenReceived,
-  onPreviewFile,
-  onOpenSourceModal,
+  lang,
+  onStartSend,
+  onStartReceive,
+  onFilesDropped,
+  history,
+  onClearHistory,
 }) => {
-  const [downloadingZip, setDownloadingZip] = useState(false);
-  const [downloadSuccessMsg, setDownloadSuccessMsg] = useState<string | null>(null);
+  const t = translations[lang];
 
-  const handleDownloadZipDirect = async () => {
-    setDownloadingZip(true);
-    setDownloadSuccessMsg(null);
-    try {
-      const res = await downloadProjectZip();
-      setDownloadSuccessMsg(`सफलता! ${res.sizeFormatted}`);
-      setTimeout(() => setDownloadSuccessMsg(null), 4000);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'डाउनलोड विफल';
-      alert('डाउनलोड त्रुटि: ' + msg);
-    } finally {
-      setDownloadingZip(false);
-    }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) onFilesDropped(e.dataTransfer.files);
   };
-  const categoryCards = [
-    {
-      id: 'app' as const,
-      label: 'Apps',
-      icon: Layers,
-      color: 'from-blue-500 to-indigo-600',
-      subtitle: 'APKs & Apps',
-    },
-    {
-      id: 'video' as const,
-      label: 'Videos',
-      icon: Film,
-      color: 'from-rose-500 to-red-600',
-      subtitle: 'MP4, 4K, MKV',
-    },
-    {
-      id: 'audio' as const,
-      label: 'Music',
-      icon: Music,
-      color: 'from-amber-500 to-orange-600',
-      subtitle: 'MP3 & Audio',
-    },
-    {
-      id: 'photo' as const,
-      label: 'Photos',
-      icon: Image,
-      color: 'from-emerald-500 to-teal-600',
-      subtitle: 'Images & RAW',
-    },
-    {
-      id: 'document' as const,
-      label: 'Documents',
-      icon: FileText,
-      color: 'from-purple-500 to-violet-600',
-      subtitle: 'PDF, Office, ZIP',
-    },
-    {
-      id: 'file' as const,
-      label: 'Storage',
-      icon: FolderOpen,
-      color: 'from-cyan-500 to-blue-600',
-      subtitle: 'Device Files',
-    },
-  ];
+
+  const formatSize = (bytes: number) => {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0)} ${units[i]}`;
+  };
 
   return (
-    <div className="w-full max-w-xl mx-auto px-3.5 sm:px-4 py-4 sm:py-6 space-y-5 sm:space-y-6">
-      <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border border-slate-800 p-4 sm:p-5 shadow-lg">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[11px] font-bold border border-blue-500/20 mb-1.5">
-              <Zap className="w-3 h-3 text-cyan-400 fill-cyan-400" />
-              <span>Direct P2P • High Speed</span>
+    <div className="mx-auto w-full max-w-4xl px-4 pb-28 pt-5 sm:pt-8" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
+      <section className="relative overflow-hidden rounded-[30px] border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/50 p-5 shadow-2xl sm:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-blue-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 left-16 h-44 w-44 rounded-full bg-indigo-500/10 blur-3xl" />
+
+        <div className="relative grid gap-6 md:grid-cols-[1.1fr_.9fr] md:items-center">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.55)]" />
+              Direct device transfer
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              Fast File Sharing
+
+            <h1 className="max-w-xl text-3xl font-black tracking-tight text-white sm:text-4xl">
+              {lang === 'hi' ? 'फाइल भेजें।' : 'Send files.'}
+              <br />
+              <span className="text-slate-400">{lang === 'hi' ? 'सीधे दूसरे डिवाइस पर।' : 'Directly to another device.'}</span>
             </h1>
-            <p className="text-xs text-slate-300 line-clamp-2 mt-0.5">
-              Transfer apps, videos, music, and documents directly between devices.
+
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
+              {lang === 'hi'
+                ? 'फोटो, वीडियो, दस्तावेज़ और बड़ी फाइलें चुनें। कनेक्शन बनते ही डेटा सीधे डिवाइसों के बीच ट्रांसफर होता है।'
+                : 'Choose photos, videos, documents, or large files. Once paired, the binary data moves directly between devices.'}
             </p>
-          </div>
 
-          <div className="hidden xs:flex flex-col items-end shrink-0 pl-2">
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
-              <Wifi className="w-3.5 h-3.5 animate-pulse" />
-              <span>100+ Mbps</span>
-            </div>
-            <span className="text-[10px] text-slate-400">Zero Mobile Data</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Direct Source Code ZIP Attached Banner */}
-      <div className="rounded-2xl bg-gradient-to-r from-blue-950/70 via-slate-900 to-indigo-950/70 border border-blue-500/40 p-3.5 sm:p-4 shadow-xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30 shrink-0">
-              <FolderArchive className="w-5 h-5 text-blue-300" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs sm:text-sm font-bold text-white truncate">
-                  SharePro-SourceCode.zip
-                </h3>
-                <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono border border-emerald-500/30 shrink-0">
-                  Android & Web (.ZIP)
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-300 mt-0.5">
-                संपूर्ण Android Studio प्रोजेक्ट, GitHub Actions वर्कफ़्लो (.yml), व सोर्स कोड शामिल
-              </p>
+            <div className="mt-5 flex flex-wrap gap-2 text-[11px] text-slate-400">
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"><Zap className="h-3.5 w-3.5 text-amber-300" />High throughput</span>
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />Encrypted P2P</span>
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"><FileCheck2 className="h-3.5 w-3.5 text-blue-300" />Size checked</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-            {onOpenSourceModal && (
-              <button
-                onClick={onOpenSourceModal}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors"
-              >
-                फाइल लिस्ट
-              </button>
-            )}
+          <div className="grid gap-3">
             <button
-              onClick={handleDownloadZipDirect}
-              disabled={downloadingZip}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 active:scale-95 transition-all text-center"
+              onClick={onStartSend}
+              className="group flex min-h-28 items-center justify-between rounded-3xl border border-blue-500/25 bg-blue-600/10 px-5 py-4 text-left transition hover:border-blue-400/50 hover:bg-blue-600/15 active:scale-[.99]"
             >
-              {downloadSuccessMsg ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-300" />
-                  <span className="text-emerald-200">{downloadSuccessMsg}</span>
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{downloadingZip ? 'पैकेजिंग...' : 'डाउनलोड ज़िप (.ZIP)'}</span>
-                </>
-              )}
+              <span>
+                <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-950/40">
+                  <ArrowUpFromLine className="h-5 w-5" />
+                </span>
+                <span className="block text-lg font-bold text-white">{t.send}</span>
+                <span className="mt-0.5 block text-xs text-slate-400">{t.sendDesc}</span>
+              </span>
+              <span className="text-2xl text-blue-300 transition group-hover:translate-x-1">›</span>
+            </button>
+
+            <button
+              onClick={onStartReceive}
+              className="group flex min-h-28 items-center justify-between rounded-3xl border border-emerald-500/25 bg-emerald-500/10 px-5 py-4 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/15 active:scale-[.99]"
+            >
+              <span>
+                <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-950/40">
+                  <ArrowDownToLine className="h-5 w-5" />
+                </span>
+                <span className="block text-lg font-bold text-white">{t.receive}</span>
+                <span className="mt-0.5 block text-xs text-slate-400">{t.receiveDesc}</span>
+              </span>
+              <span className="text-2xl text-emerald-300 transition group-hover:translate-x-1">›</span>
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <button
-          onClick={() => onInitiateSend()}
-          className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white shadow-xl shadow-blue-950/40 border border-blue-400/30 active:scale-[0.98] transition-all text-left flex flex-col justify-between min-h-[140px] sm:min-h-[160px]"
-        >
-          <div className="flex items-start justify-between">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/15 flex items-center justify-center border border-white/20 shadow-inner">
-              <Send className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold uppercase tracking-wider">
-              Send
-            </span>
-          </div>
-
-          <div className="mt-4">
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              SEND
-            </h2>
-            <p className="text-[11px] sm:text-xs text-blue-100/90 font-medium">
-              Pick & beam files
-            </p>
-          </div>
-        </button>
-
-        <button
-          onClick={onInitiateReceive}
-          className="group relative overflow-hidden rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-900 text-white shadow-xl shadow-emerald-950/40 border border-emerald-400/30 active:scale-[0.98] transition-all text-left flex flex-col justify-between min-h-[140px] sm:min-h-[160px]"
-        >
-          <div className="flex items-start justify-between">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/15 flex items-center justify-center border border-white/20 shadow-inner">
-              <Download className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold uppercase tracking-wider">
-              QR Code
-            </span>
-          </div>
-
-          <div className="mt-4">
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              RECEIVE
-            </h2>
-            <p className="text-[11px] sm:text-xs text-emerald-100/90 font-medium">
-              Show QR & receive
-            </p>
-          </div>
-        </button>
-      </div>
-
-      {receivedFiles.length > 0 && (
-        <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
-                <Inbox className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>Received Files</span>
-                  <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono">
-                    {receivedFiles.length}
-                  </span>
-                </h3>
-                <p className="text-[10px] text-slate-400">Stored in app storage • Tap to play or view</p>
-              </div>
-            </div>
-
-            {onOpenReceived && (
-              <button
-                onClick={onOpenReceived}
-                className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition-colors"
-              >
-                <span>View All</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            {receivedFiles.slice(0, 3).map((file) => {
-              const isMedia = file.category === 'video' || file.category === 'audio';
-              return (
-                <div
-                  key={file.id}
-                  className="p-2 rounded-xl bg-slate-800/60 border border-slate-750 flex items-center justify-between gap-2 hover:bg-slate-800 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <div className="w-7 h-7 rounded-lg bg-slate-700/80 flex items-center justify-center shrink-0">
-                      {file.category === 'video' ? (
-                        <Film className="w-3.5 h-3.5 text-rose-400" />
-                      ) : file.category === 'audio' ? (
-                        <Music className="w-3.5 h-3.5 text-amber-400" />
-                      ) : file.category === 'photo' ? (
-                        <Image className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <FileText className="w-3.5 h-3.5 text-purple-400" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-white truncate">{file.name}</p>
-                      <p className="text-[10px] text-slate-400">{formatBytes(file.size)}</p>
-                    </div>
-                  </div>
-
-                  {onPreviewFile && (
-                    <button
-                      onClick={() => onPreviewFile(file)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 shrink-0 ${
-                        isMedia
-                          ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                          : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                      }`}
-                    >
-                      {isMedia ? <Play className="w-3 h-3 fill-current" /> : <Eye className="w-3 h-3" />}
-                      <span>{isMedia ? 'Play' : 'View'}</span>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        <div className="relative mt-5 rounded-2xl border border-slate-800 bg-slate-950/45 p-3 text-center text-[11px] text-slate-500">
+          {lang === 'hi'
+            ? 'डेस्कटॉप पर फाइलें इस कार्ड पर ड्रैग-एंड-ड्रॉप भी कर सकते हैं।'
+            : 'On desktop, you can also drag files anywhere onto this screen.'}
         </div>
+      </section>
+
+      <section className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/65 p-4">
+          <HardDrive className="h-4 w-4 text-slate-400" />
+          <p className="mt-3 text-xs font-semibold text-slate-200">{lang === 'hi' ? 'कोई डमी फाइल नहीं' : 'No demo files'}</p>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500">{t.realUseNotice}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/65 p-4">
+          <Zap className="h-4 w-4 text-amber-300" />
+          <p className="mt-3 text-xs font-semibold text-slate-200">{lang === 'hi' ? 'सीधा डेटा चैनल' : 'Direct data channel'}</p>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500">{lang === 'hi' ? 'फाइल डेटा सिग्नलिंग सर्वर के रास्ते नहीं भेजा जाता।' : 'File bytes do not travel through the signaling server.'}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/65 p-4">
+          <Clock3 className="h-4 w-4 text-blue-300" />
+          <p className="mt-3 text-xs font-semibold text-slate-200">{lang === 'hi' ? 'हाल का इतिहास' : 'Recent history'}</p>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500">
+            {history.length ? `${history.length} ${history.length === 1 ? 'transfer' : 'transfers'}` : t.noHistory}
+          </p>
+        </div>
+      </section>
+
+      {history.length > 0 && (
+        <section className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-white">{t.history}</h2>
+              <p className="text-[11px] text-slate-500">{lang === 'hi' ? 'हाल के ट्रांसफर' : 'Recent transfers'}</p>
+            </div>
+            <button onClick={onClearHistory} className="text-[11px] font-semibold text-slate-500 hover:text-red-300">
+              {t.clearAll}
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {history.slice(0, 3).map((item) => (
+              <div key={item.id} className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-white">
+                    {item.files.length} {t.filesSelected} · {item.peerName}
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    {new Date(item.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · {formatSize(item.totalSize)}
+                  </p>
+                </div>
+                <span className={`ml-3 shrink-0 rounded-full px-2 py-1 text-[9px] font-bold uppercase ${
+                  item.direction === 'sent'
+                    ? 'bg-blue-500/10 text-blue-300'
+                    : 'bg-emerald-500/10 text-emerald-300'
+                }`}>
+                  {item.direction === 'sent' ? 'Sent' : 'Received'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
-
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between px-0.5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Categories
-          </h3>
-          <span className="text-[11px] text-slate-500 font-medium">
-            Quick Send
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-2.5">
-          {categoryCards.map((cat) => {
-            const Icon = cat.icon;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => onInitiateSend(cat.id)}
-                className="group p-3 rounded-2xl bg-slate-900 border border-slate-800/80 hover:border-slate-700 active:scale-95 transition-all text-center flex flex-col items-center justify-center gap-1.5 shadow-md"
-              >
-                <div
-                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr ${cat.color} flex items-center justify-center shadow-md text-white transition-transform group-hover:scale-105`}
-                >
-                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                </div>
-                <span className="text-xs font-bold text-slate-200 tracking-tight">
-                  {cat.label}
-                </span>
-                <span className="text-[9px] text-slate-400 hidden sm:block">
-                  {cat.subtitle}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 pt-1">
-        <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-          <div className="text-[11px] font-bold text-white">Direct P2P</div>
-          <div className="text-[9px] text-slate-400">No Cloud Storage</div>
-        </div>
-        <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
-          <Wifi className="w-4 h-4 text-cyan-400 mx-auto mb-1" />
-          <div className="text-[11px] font-bold text-white">High-Speed Wi-Fi</div>
-          <div className="text-[9px] text-slate-400">Up to 100+ MB/s</div>
-        </div>
-        <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
-          <Zap className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-          <div className="text-[11px] font-bold text-white">Cross Platform</div>
-          <div className="text-[9px] text-slate-400">Web & Android</div>
-        </div>
-      </div>
     </div>
   );
 };

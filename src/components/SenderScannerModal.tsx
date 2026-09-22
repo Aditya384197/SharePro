@@ -1,396 +1,250 @@
-import React, { useState, useEffect, useRef } from 'react';
-import jsQR from 'jsqr';
+import React, { useEffect, useRef, useState } from 'react';
+import { BrowserQRCodeReader } from '@zxing/browser';
 import {
   X,
-  Camera,
+  Send,
   Radio,
-  KeyRound,
   Smartphone,
-  AlertCircle,
-  Loader2,
+  Laptop,
+  ArrowLeft,
+  RefreshCw,
+  KeyRound,
+  Camera,
 } from 'lucide-react';
-import { DiscoveredPeer, FileItem } from '../types';
-import { sounds } from '../utils/audio';
+import type { TransferFile, ActiveRoom } from '../types.ts';
+import type { Language } from '../utils/i18n.ts';
+import { translations } from '../utils/i18n.ts';
 
 interface SenderScannerModalProps {
-  selectedFiles: FileItem[];
-  deviceName: string;
+  isOpen: boolean;
   onClose: () => void;
-  onConnectToRoom: (roomId: string, pin: string) => void;
+  onBackToFileSelect: () => void;
+  files: TransferFile[];
+  activeRooms: ActiveRoom[];
+  onRefreshRooms: () => void;
+  onConnectToTarget: (value: string) => void;
+  lang: Language;
 }
 
 export const SenderScannerModal: React.FC<SenderScannerModalProps> = ({
-  selectedFiles,
-  deviceName,
+  isOpen,
   onClose,
-  onConnectToRoom,
+  onBackToFileSelect,
+  files,
+  activeRooms,
+  onRefreshRooms,
+  onConnectToTarget,
+  lang,
 }) => {
-  const [activeTab, setActiveTab] = useState<'scan' | 'radar' | 'pin'>('scan');
-  const [cameraError, setCameraError] = useState<string | null>(null);
   const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [isSubmittingPin, setIsSubmittingPin] = useState(false);
-  const [discoveredPeers, setDiscoveredPeers] = useState<DiscoveredPeer[]>([]);
-
+  const [isScanningCamera, setIsScanningCamera] = useState(false);
+  const [scanError, setScanError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-  const isScanningQrRef = useRef(false);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const t = translations[lang];
 
   useEffect(() => {
-    if (activeTab !== 'scan') {
-      stopCamera();
-      return;
-    }
+    if (!isOpen) return;
+    onRefreshRooms();
+    const interval = setInterval(onRefreshRooms, 2000);
+    return () => clearInterval(interval);
+  }, [isOpen, onRefreshRooms]);
 
-    startCamera();
+  useEffect(() => {
+    if (!isScanningCamera) return;
 
-    return () => {
-      stopCamera();
-    };
-  }, [activeTab]);
+    let cancelled = false;
+    setScanError('');
+    const reader = new BrowserQRCodeReader();
 
-  const startCamera = async () => {
-    setCameraError(null);
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Camera not supported');
-      }
+    void reader
+      .decodeFromVideoDevice(
+        undefined,
+        videoRef.current,
+        (result, error, controls) => {
+          controlsRef.current = controls;
+          if (cancelled || !result) return;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
+          const value = result.getText()?.trim();
+          if (!value) return;
+
+          cancelled = true;
+          controls.stop();
+          controlsRef.current = null;
+          setIsScanningCamera(false);
+          onConnectToTarget(value);
+        }
+      )
+      .catch(() => {
+        if (!cancelled) {
+          setScanError(
+            lang === 'hi'
+              ? 'कैमरा या QR स्कैन उपलब्ध नहीं है। पिन/लिंक से कनेक्ट करें।'
+              : 'Camera or QR scanning is unavailable. Use the PIN/link instead.'
+          );
+        }
       });
 
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        await videoRef.current.play();
-        isScanningQrRef.current = true;
-        scanQrFrame();
-      }
-    } catch {
-      setCameraError('Camera unavailable');
-      setActiveTab('radar');
-    }
-  };
-
-  const stopCamera = () => {
-    isScanningQrRef.current = false;
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-  };
-
-  const scanQrFrame = () => {
-    if (!isScanningQrRef.current) return;
-
-    const video = videoRef.current;
-    if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert',
-        });
-
-        if (code && code.data) {
-          try {
-            let targetRoomId = '';
-            let targetPin = '';
-
-            if (code.data.includes('join=')) {
-              const url = new URL(code.data);
-              targetPin = url.searchParams.get('join') || '';
-              targetRoomId = targetPin;
-            } else if (code.data.startsWith('{')) {
-              const parsed = JSON.parse(code.data);
-              targetRoomId = parsed.roomId;
-              targetPin = parsed.pin || parsed.roomId;
-            } else if (/^\d{6}$/.test(code.data.trim())) {
-              targetPin = code.data.trim();
-              targetRoomId = targetPin;
-            }
-
-            if (targetRoomId) {
-              sounds.playPairSuccess();
-              stopCamera();
-              onConnectToRoom(targetRoomId, targetPin);
-              return;
-            }
-          } catch {}
-        }
-      }
-    }
-
-    animFrameRef.current = requestAnimationFrame(scanQrFrame);
-  };
-
-  useEffect(() => {
-    let timer: number;
-
-    const fetchPeers = async () => {
-      try {
-        const res = await fetch('/api/rooms');
-        const data = await res.json();
-        if (data.success && Array.isArray(data.rooms)) {
-          setDiscoveredPeers(data.rooms);
-        }
-      } catch {}
+    return () => {
+      cancelled = true;
+      controlsRef.current?.stop();
+      controlsRef.current = null;
     };
+  }, [isScanningCamera, lang, onConnectToTarget]);
 
-    fetchPeers();
-    timer = window.setInterval(fetchPeers, 3000);
+  if (!isOpen) return null;
 
-    return () => clearInterval(timer);
-  }, []);
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
 
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanPin = pinInput.replace(/\D/g, '');
-    if (cleanPin.length !== 6) {
-      setPinError('Enter a valid 6-digit PIN');
-      return;
-    }
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / Math.pow(1024, index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+  };
 
-    setPinError(null);
-    setIsSubmittingPin(true);
-    try {
-      const res = await fetch(`/api/rooms/${cleanPin}`);
-      const data = await res.json();
-      if (data.success) {
-        sounds.playPairSuccess();
-        onConnectToRoom(cleanPin, cleanPin);
-      } else {
-        setPinError('Room not found or expired');
-      }
-    } catch {
-      setPinError('Connection failed');
-    } finally {
-      setIsSubmittingPin(false);
-    }
+  const targetValue = pinInput.trim();
+  const canSubmit = /^\d{6}$/.test(targetValue) || /^(sharepro:\/\/|https?:\/\/)/i.test(targetValue);
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (canSubmit) onConnectToTarget(targetValue);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[90dvh]">
-        <div className="px-4 sm:px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/95 shrink-0">
-          <div className="min-w-0 pr-2">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-bold text-white truncate">
-                Connect to Receiver
-              </h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0 font-bold">
-                {selectedFiles.length} files
-              </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-md">
+      <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-800 bg-slate-900 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/75 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBackToFileSelect}
+              className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-slate-200"
+              aria-label={t.back}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div>
+              <h3 className="font-bold text-white">{t.connectAndSend}</h3>
+              <p className="text-xs text-slate-400">
+                {files.length} {t.filesSelected} · {formatFileSize(totalSize)}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close"
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+            className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+            aria-label={t.exit}
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-2.5 border-b border-slate-800 bg-slate-950/60 flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => setActiveTab('scan')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'scan'
-                ? 'bg-blue-600 text-white shadow'
-                : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
-            }`}
-          >
-            <Camera className="w-3.5 h-3.5" />
-            <span>Scan QR</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('radar')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'radar'
-                ? 'bg-emerald-600 text-white shadow'
-                : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5" />
-            <span>Radar</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('pin')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'pin'
-                ? 'bg-indigo-600 text-white shadow'
-                : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>PIN</span>
-          </button>
-        </div>
-
-        <div className="p-4 sm:p-5 flex-1 overflow-y-auto flex flex-col items-center justify-center min-h-[260px]">
-          {activeTab === 'scan' && (
-            <div className="w-full flex flex-col items-center space-y-3">
-              <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-2xl overflow-hidden bg-black border-2 border-blue-500/50 shadow-xl flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                />
-
-                <div className="absolute inset-6 border-2 border-cyan-400 rounded-xl pointer-events-none shadow-[0_0_15px_rgba(34,211,238,0.4)]">
-                  <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_8px_#22d3ee] animate-bounce" />
+        <div className="space-y-5 overflow-y-auto p-5">
+          {isScanningCamera ? (
+            <div className="space-y-4">
+              <div className="relative mx-auto aspect-square max-w-sm overflow-hidden rounded-3xl border border-blue-500/50 bg-black shadow-xl">
+                <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                <div className="pointer-events-none absolute inset-10 rounded-3xl border-2 border-dashed border-emerald-400/80" />
+                <div className="absolute left-1/2 top-1/2 h-0.5 w-[68%] -translate-x-1/2 bg-emerald-400/70" />
+              </div>
+              {scanError && <p className="text-center text-xs text-amber-300">{scanError}</p>}
+              <button
+                onClick={() => setIsScanningCamera(false)}
+                className="w-full rounded-2xl bg-slate-800 py-3 text-sm font-semibold text-slate-200"
+              >
+                {lang === 'hi' ? 'स्कैन बंद करें' : 'Close Scanner'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold text-white">
+                      {lang === 'hi' ? 'नजदीकी डिवाइस' : 'Nearby devices'}
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      {lang === 'hi' ? 'उसी Wi-Fi नेटवर्क पर रिसीवर खोजें' : 'Receivers on the same Wi-Fi network'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={onRefreshRooms}
+                    className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-slate-300"
+                    aria-label="Refresh"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
                 </div>
 
-                {cameraError && (
-                  <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center p-3 text-center">
-                    <AlertCircle className="w-7 h-7 text-amber-400 mb-1.5" />
-                    <p className="text-xs text-slate-300 mb-2">{cameraError}</p>
-                    <button
-                      onClick={() => setActiveTab('radar')}
-                      className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-semibold"
-                    >
-                      Use Radar
-                    </button>
+                {activeRooms.length > 0 ? (
+                  <div className="space-y-2">
+                    {activeRooms.map((room) => (
+                      <button
+                        key={`${room.room}-${room.address || ''}`}
+                        onClick={() => onConnectToTarget(room.address ? `${room.address}?room=${encodeURIComponent(room.room)}&token=${encodeURIComponent(room.token || '')}&name=${encodeURIComponent(room.deviceName)}` : room.room)}
+                        className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left transition hover:border-emerald-500/50"
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                            {room.deviceType === 'desktop' ? <Laptop className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}
+                          </span>
+                          <span>
+                            <span className="block text-sm font-semibold text-white">{room.deviceName}</span>
+                            <span className="block text-xs text-slate-500">PIN · {room.room}</span>
+                          </span>
+                        </span>
+                        <Send className="h-4 w-4 text-emerald-400" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/60 px-5 py-8 text-center">
+                    <Radio className="mx-auto h-7 w-7 text-slate-600" />
+                    <p className="mt-3 text-sm text-slate-300">
+                      {lang === 'hi' ? 'रिसीवर खोज रहे हैं…' : 'Looking for receivers…'}
+                    </p>
                   </div>
                 )}
               </div>
 
-              <p className="text-xs font-semibold text-slate-300 text-center">
-                Align QR Code within Frame
-              </p>
-            </div>
-          )}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-800" />
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">या</span>
+                <div className="h-px flex-1 bg-slate-800" />
+              </div>
 
-          {activeTab === 'radar' && (
-            <div className="w-full flex flex-col items-center space-y-3">
-              <div className="relative w-48 h-48 sm:w-52 sm:h-52 rounded-full border border-emerald-500/30 bg-slate-950/80 flex items-center justify-center overflow-hidden shadow-inner">
-                <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_0deg,transparent_0deg,transparent_270deg,rgba(16,185,129,0.3)_360deg)] animate-spin [animation-duration:3s]" />
-                <div className="absolute w-36 h-36 rounded-full border border-emerald-500/20" />
-                <div className="absolute w-24 h-24 rounded-full border border-emerald-500/20" />
-
-                <div className="relative z-10 w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg border-2 border-white/40">
-                  <Smartphone className="w-4 h-4" />
+              <form onSubmit={submit} className="space-y-3">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                  <KeyRound className="h-4 w-4 text-blue-400" />
+                  {lang === 'hi' ? 'पिन या QR लिंक' : 'PIN or QR link'}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    placeholder={lang === 'hi' ? '6-अंकों का पिन' : '6-digit PIN'}
+                    className="min-w-0 flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-center font-mono text-lg tracking-widest text-white outline-none focus:border-blue-500"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!canSubmit}
+                    className="rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white disabled:opacity-40"
+                  >
+                    {lang === 'hi' ? 'जोड़ें' : 'Connect'}
+                  </button>
                 </div>
-
-                {discoveredPeers.map((peer, idx) => {
-                  const angle = (idx * (360 / Math.max(1, discoveredPeers.length))) * (Math.PI / 180);
-                  const radius = 62;
-                  const x = Math.cos(angle) * radius;
-                  const y = Math.sin(angle) * radius;
-
-                  return (
-                    <button
-                      key={peer.id}
-                      onClick={() => {
-                        sounds.playPairSuccess();
-                        onConnectToRoom(peer.id, peer.pin);
-                      }}
-                      style={{
-                        transform: `translate(${x}px, ${y}px)`,
-                      }}
-                      className="absolute z-20 flex flex-col items-center cursor-pointer transition-transform hover:scale-110 active:scale-95"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md border-2 border-white animate-pulse">
-                        <Smartphone className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="text-[9px] font-bold text-white bg-slate-900/90 px-1 py-0.5 rounded border border-emerald-500/40 mt-0.5 whitespace-nowrap shadow max-w-[70px] truncate">
-                        {peer.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="w-full space-y-1.5 pt-1">
-                {discoveredPeers.length > 0 ? (
-                  discoveredPeers.map((peer) => (
-                    <button
-                      key={peer.id}
-                      onClick={() => {
-                        sounds.playPairSuccess();
-                        onConnectToRoom(peer.id, peer.pin);
-                      }}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-emerald-500/30 text-left transition-all"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                          <Smartphone className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-xs font-bold text-white block truncate">{peer.name}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">PIN: {peer.pin}</span>
-                        </div>
-                      </div>
-                      <span className="text-xs px-2 py-1 rounded-lg bg-emerald-600 text-white font-semibold shrink-0">
-                        Connect
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <p className="text-xs text-slate-400 text-center py-2">
-                    Searching for nearby devices...
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'pin' && (
-            <form onSubmit={handlePinSubmit} className="w-full flex flex-col items-center space-y-4">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
-                <KeyRound className="w-5 h-5" />
-              </div>
-
-              <div className="w-full max-w-xs space-y-1.5">
-                <input
-                  type="text"
-                  maxLength={6}
-                  inputMode="numeric"
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
-                  placeholder="------"
-                  autoFocus
-                  className="w-full text-center tracking-[0.4em] text-2xl sm:text-3xl font-mono font-black py-2.5 px-3 rounded-2xl bg-slate-950 border border-indigo-500/50 text-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                />
-                {pinError && (
-                  <p className="text-xs text-red-400 text-center font-medium">{pinError}</p>
-                )}
-              </div>
+              </form>
 
               <button
-                type="submit"
-                disabled={pinInput.length !== 6 || isSubmittingPin}
-                className={`w-full max-w-xs py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                  pinInput.length === 6 && !isSubmittingPin
-                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg cursor-pointer'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                }`}
+                onClick={() => setIsScanningCamera(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 py-3 text-sm font-semibold text-slate-200"
               >
-                {isSubmittingPin ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Connecting...
-                  </span>
-                ) : (
-                  'Connect'
-                )}
+                <Camera className="h-4 w-4 text-emerald-400" />
+                {lang === 'hi' ? 'QR कोड स्कैन करें' : 'Scan QR code'}
               </button>
-            </form>
+            </>
           )}
         </div>
       </div>

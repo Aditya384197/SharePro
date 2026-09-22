@@ -1,117 +1,81 @@
-import React, { useState } from 'react';
-import { Zap, History, Smartphone, Check, FolderArchive, Wifi } from 'lucide-react';
+import React from 'react';
+import { Clock3, Code2, Globe2, Share2, Wifi, WifiOff } from 'lucide-react';
+import type { Language } from '../utils/i18n.ts';
+import { translations } from '../utils/i18n.ts';
 
 interface NavbarProps {
-  deviceName: string;
-  onDeviceNameChange: (name: string) => void;
-  historyCount: number;
+  lang: Language;
+  onToggleLang: () => void;
   onOpenHistory: () => void;
-  onOpenSourceModal: () => void;
-  onOpenWifiStatus?: () => void;
+  onOpenSourceCode: () => void;
+  historyCount: number;
+  isOnline: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  deviceName,
-  onDeviceNameChange,
-  historyCount,
+  lang,
+  onToggleLang,
   onOpenHistory,
-  onOpenSourceModal,
-  onOpenWifiStatus,
+  onOpenSourceCode,
+  historyCount,
+  isOnline,
 }) => {
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(deviceName);
-
-  const handleNameSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (tempName.trim()) {
-      onDeviceNameChange(tempName.trim());
-    }
-    setIsEditingName(false);
-  };
+  const t = translations[lang];
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 text-white w-full">
-      <div className="max-w-xl mx-auto px-3.5 sm:px-4 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-            <Zap className="w-4 h-4 text-white fill-white" />
+    <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-950/40">
+            <Share2 className="h-4.5 w-4.5 text-white" />
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-base font-black tracking-tight text-white">
-              SharePro
-            </span>
-            <span className="text-[9px] uppercase font-extrabold tracking-wider px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-              P2P
-            </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-base font-extrabold tracking-tight text-white">{t.appName}</span>
+              <span className="hidden rounded-full border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-300 sm:inline">
+                P2P
+              </span>
+            </div>
+            <p className="hidden truncate text-[10px] text-slate-500 sm:block">{t.tagline}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {onOpenWifiStatus && (
-            <button
-              onClick={onOpenWifiStatus}
-              className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700/60 text-slate-300 hover:text-emerald-400 transition-colors"
-              title="Wi-Fi P2P Status"
-              aria-label="Wi-Fi Status"
-            >
-              <Wifi className="w-4 h-4" />
-            </button>
-          )}
+        <div className="flex items-center gap-1.5">
+          <div className="hidden items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 text-[10px] font-medium text-slate-400 md:flex">
+            {isOnline ? <Wifi className="h-3.5 w-3.5 text-emerald-400" /> : <WifiOff className="h-3.5 w-3.5 text-amber-400" />}
+            <span>{isOnline ? 'Network' : 'Local'}</span>
+          </div>
 
           <button
-            onClick={onOpenSourceModal}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-xs text-blue-300 transition-colors"
-            title="Download Source ZIP & APK Build"
-            aria-label="Download Source Code ZIP"
+            onClick={onToggleLang}
+            className="rounded-xl border border-slate-800 bg-slate-900 p-2 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            title="हिन्दी / English"
+            aria-label="Change language"
           >
-            <FolderArchive className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline font-bold">ZIP</span>
+            <Globe2 className="h-4 w-4" />
           </button>
-
-          {isEditingName ? (
-            <form onSubmit={handleNameSubmit} className="flex items-center gap-1">
-              <input
-                type="text"
-                value={tempName}
-                onChange={(e) => setTempName(e.target.value)}
-                onBlur={() => handleNameSubmit()}
-                autoFocus
-                className="bg-slate-800 text-white text-xs px-2 py-1 rounded-lg border border-blue-500 outline-none w-20 sm:w-32"
-                maxLength={18}
-              />
-              <button
-                type="submit"
-                className="p-1 rounded-lg bg-blue-600 text-white"
-              >
-                <Check className="w-3.5 h-3.5" />
-              </button>
-            </form>
-          ) : (
-            <button
-              onClick={() => {
-                setTempName(deviceName);
-                setIsEditingName(true);
-              }}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700/60 text-xs text-slate-200 transition-colors"
-            >
-              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
-              <span className="max-w-[70px] sm:max-w-[110px] truncate font-medium">
-                {deviceName}
-              </span>
-            </button>
-          )}
 
           <button
             onClick={onOpenHistory}
-            className="relative p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700/60 text-slate-200 hover:text-white transition-colors"
-            aria-label="Transfer History"
+            className="relative rounded-xl border border-slate-800 bg-slate-900 p-2 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            title={t.history}
+            aria-label={t.history}
           >
-            <History className="w-4 h-4" />
+            <Clock3 className="h-4 w-4" />
             {historyCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
-                {historyCount > 9 ? '9+' : historyCount}
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white">
+                {historyCount > 99 ? '99+' : historyCount}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={onOpenSourceCode}
+            className="rounded-xl border border-slate-800 bg-slate-900 p-2 text-slate-300 transition hover:border-indigo-500/40 hover:bg-indigo-950/40 hover:text-white"
+            title="Source & APK"
+            aria-label="Source & APK"
+          >
+            <Code2 className="h-4 w-4" />
           </button>
         </div>
       </div>

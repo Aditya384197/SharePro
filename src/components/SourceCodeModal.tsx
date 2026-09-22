@@ -1,344 +1,245 @@
-import React, { useEffect, useState } from 'react';
-import {
-  X,
-  Download,
-  FolderArchive,
-  CheckCircle2,
-  FileCode2,
-  Workflow,
-  Sparkles,
-  ShieldCheck,
-  ExternalLink,
-  Cpu,
-  Copy,
-  Check,
-  Eye,
-  FileText,
-  AlertCircle,
-  FolderTree,
-} from 'lucide-react';
-import { downloadProjectZip, DownloadResult } from '../utils/downloadZip';
+import React, { useState, useEffect } from 'react';
+import { X, Download, Terminal, Check, Smartphone, Github, Sparkles, FolderArchive, ArrowLeft, FileCode, CheckCircle2 } from 'lucide-react';
+import type { Language } from '../utils/i18n.ts';
+import { translations } from '../utils/i18n.ts';
 
 interface SourceCodeModalProps {
+  isOpen: boolean;
   onClose: () => void;
+  lang: Language;
 }
 
-interface ProjectFileBundleItem {
-  path: string;
-  content: string;
-  size: number;
-}
-
-export const SourceCodeModal: React.FC<SourceCodeModalProps> = ({ onClose }) => {
-  const [bundleFiles, setBundleFiles] = useState<ProjectFileBundleItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('');
-  const [lastResult, setLastResult] = useState<DownloadResult | null>(null);
-  const [selectedFile, setSelectedFile] = useState<ProjectFileBundleItem | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'zip' | 'files'>('zip');
+export const SourceCodeModal: React.FC<SourceCodeModalProps> = ({
+  isOpen,
+  onClose,
+  lang,
+}) => {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [showFileList, setShowFileList] = useState(false);
+  const [projectFiles, setProjectFiles] = useState<string[]>([]);
+  const [totalFilesCount, setTotalFilesCount] = useState<number>(0);
+  const [downloadError, setDownloadError] = useState<string>('');
+  const t = translations[lang];
 
   useEffect(() => {
-    fetch('/api/project-files-bundle')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.files)) {
-          setBundleFiles(data.files);
-          if (data.files.length > 0) {
-            // Find App.tsx or package.json as default
-            const initial =
-              data.files.find((f: ProjectFileBundleItem) => f.path.includes('App.tsx')) ||
-              data.files[0];
-            setSelectedFile(initial);
+    if (isOpen) {
+      setDownloadError('');
+      fetch('/api/project-files-info')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.files && Array.isArray(data.files)) {
+            setProjectFiles(data.files);
+            setTotalFilesCount(data.files.length);
           }
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load project files bundle:', err);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+        })
+        .catch(err => {
+          console.warn('Could not fetch file info from server:', err);
+        });
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
 
   const handleDownload = async () => {
-    setDownloading(true);
-    setStatusMsg('तैयारी की जा रही है...');
-    setLastResult(null);
-
     try {
-      const result = await downloadProjectZip((msg) => setStatusMsg(msg));
-      setLastResult(result);
-      setStatusMsg(`सफलतापूर्वक डाउनलोड किया गया: ${result.sizeFormatted}`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'डाउनलोड में त्रुटि';
-      setStatusMsg(`त्रुटि: ${msg}`);
+      setIsDownloading(true);
+      // The complete ZIP is generated from the actual project tree on the server.
+      const resp = await fetch('/api/download-source-zip', { cache: 'no-store' });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'SharePro-Full-SourceCode-and-Android-Project.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        return;
+      }
+      throw new Error('Source ZIP server unavailable');
+    } catch (err) {
+      console.warn('Source ZIP download failed:', err);
+      setDownloadError(lang === 'hi'
+        ? 'स्रोत ZIP केवल विकास सर्वर से उपलब्ध है। यह APK के अंदर नकली ZIP नहीं बनाता।'
+        : 'The source ZIP is available from the development server; the APK does not generate a fake source package.');
     } finally {
-      setDownloading(false);
+      setIsDownloading(false);
     }
   };
 
-  const handleCopyCode = () => {
-    if (!selectedFile) return;
-    navigator.clipboard.writeText(selectedFile.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownloadSingleFile = (file: ProjectFileBundleItem) => {
-    const blob = new Blob([file.content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const parts = file.path.split('/');
-    a.download = parts[parts.length - 1];
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const copyCommand = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden my-auto">
-        {/* Modal Header */}
-        <div className="px-4 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/95 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 shrink-0">
-              <FolderArchive className="w-4 h-4 text-blue-300" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <span>SharePro Source Code (.ZIP)</span>
-                <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono border border-emerald-500/30">
-                  {bundleFiles.length} Files
-                </span>
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                असली बाइनरी ZIP आर्काइव • बिना HTML के शुद्ध संकुचित फाइल
-              </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden text-slate-200 flex flex-col max-h-[90vh]">
+        {/* Modal Header with Prominent Back Button */}
+        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+          <div className="flex items-center space-x-2">
+            <button
+              id="source-code-header-back-btn"
+              onClick={onClose}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition-all active:scale-95 group cursor-pointer shadow-sm"
+              title={t.backToHome}
+            >
+              <ArrowLeft className="w-4 h-4 text-indigo-400 group-hover:-translate-x-1 transition-transform" />
+              <span>{lang === 'hi' ? '← वापस जाएं' : '← Back'}</span>
+            </button>
+            <div className="flex items-center space-x-2 ml-1">
+              <FolderArchive className="w-4 h-4 text-indigo-400" />
+              <h3 className="font-bold text-white text-base">
+                {t.sourceCodeTitle}
+              </h3>
             </div>
           </div>
-
           <button
             onClick={onClose}
-            aria-label="Close"
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            title="Exit"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-slate-800 bg-slate-950/50 px-4 pt-2 gap-2 shrink-0">
-          <button
-            onClick={() => setActiveTab('zip')}
-            className={`pb-2 px-3 text-xs font-bold transition-colors border-b-2 flex items-center gap-1.5 ${
-              activeTab === 'zip'
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>ज़िप डाउनलोडर (Binary ZIP)</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('files')}
-            className={`pb-2 px-3 text-xs font-bold transition-colors border-b-2 flex items-center gap-1.5 ${
-              activeTab === 'files'
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <FolderTree className="w-3.5 h-3.5" />
-            <span>फाइल एक्सप्लोरर व कोड ({bundleFiles.length})</span>
-          </button>
-        </div>
-
-        {/* Tab 1: ZIP Downloader */}
-        {activeTab === 'zip' && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Primary Verification Card */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/50 via-slate-900 to-indigo-950/50 border border-blue-500/30 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-blue-400 text-xs font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>प्रोजेक्ट व संपूर्ण Android नेटिव कोड जाँचा गया (0 मिसिंग, 0 करप्ट)</span>
-                </div>
-                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  ~618 KB Binary ZIP
+        {/* Modal Body */}
+        <div className="p-6 space-y-5 overflow-y-auto">
+          {/* Main Download Card */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-950/80 to-blue-950/50 border border-indigo-700/50 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-indigo-950/30">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
+                  {totalFilesCount} Files Verified
+                </span>
+                <span className="text-[11px] text-emerald-400 font-medium flex items-center space-x-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{lang === 'hi' ? '100% रियल कोड' : '100% Real Code'}</span>
                 </span>
               </div>
-
-              <p className="text-xs text-slate-300 leading-relaxed">
-                यह डाउनलोड सीधे ब्राउज़र मेमोरी से <strong>Blob (application/zip)</strong> के रूप में ट्रिगर होता है। इसमें कोई HTML कोड या वेबपेज नहीं है। इसे अनज़िप करके आप सीधे Android Studio, VS Code या GitHub में चला सकते हैं।
+              <h4 className="font-bold text-white text-base mt-1.5 flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <span>SharePro Complete Project (.ZIP)</span>
+              </h4>
+              <p className="text-xs text-slate-300 mt-1">
+                {lang === 'hi' 
+                  ? 'वास्तविक प्रोजेक्ट फाइलें, WebRTC इंजन, Node सिग्नलिंग और Android प्रोजेक्ट शामिल हैं।'
+                  : 'Includes the real project files, WebRTC engine, Node signaling server and Android project.'}
               </p>
-
-              {/* Status Banner during/after download */}
-              {statusMsg && (
-                <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-xs font-mono text-cyan-300 flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span>{statusMsg}</span>
-                </div>
+              {downloadError && (
+                <p className="text-[11px] text-amber-300 mt-2">{downloadError}</p>
               )}
+            </div>
+            <button
+              id="download-source-zip-btn"
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="w-full sm:w-auto px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-semibold text-xs flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer whitespace-nowrap disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>{isDownloading ? 'Packaging ZIP...' : (lang === 'hi' ? 'ZIP डाउनलोड करें' : t.downloadZip)}</span>
+            </button>
+          </div>
 
-              {lastResult && lastResult.success && (
-                <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-1">
-                  <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>फाइल डाउनलोड सफल: SharePro-SourceCode.zip</span>
-                  </div>
-                  <div className="text-[11px] text-emerald-200/90 font-mono">
-                    फाइल साइज: {lastResult.sizeFormatted} • फाइल्स: {lastResult.filesCount} • फॉर्मेट: PK ZIP (Deflate)
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-bold shadow-xl shadow-blue-600/30 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>
-                  {downloading ? 'ज़िप तैयार व डाउनलोड हो रहा है...' : 'अभी असली ZIP डाउनलोड करें (80 KB .ZIP)'}
+          {/* Project Files Audit Accordion */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <FileCode className="w-4 h-4 text-blue-400" />
+                <span className="font-bold text-white text-xs">
+                  {lang === 'hi' ? `प्रोजेक्ट फाइलें (${totalFilesCount} फाइल्स)` : `Project Files (${totalFilesCount} Files)`}
                 </span>
+              </div>
+              <button
+                onClick={() => setShowFileList(!showFileList)}
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium underline transition-colors cursor-pointer"
+              >
+                {showFileList ? (lang === 'hi' ? 'छुपाएं' : 'Hide') : (lang === 'hi' ? 'फाइल सूची देखें' : 'View File List')}
               </button>
             </div>
 
-            {/* Workflow & Instructions */}
-            <div className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Workflow className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Android APK ऑटो-बिल्ड वर्कफ़्लो शामिल है</span>
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
-                  .github/workflows/build-apk.yml
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                इस ज़िप को अनज़िप करके GitHub पर अपलोड करें। GitHub Actions अपने आप Gradle रन करके <strong>SharePro-Debug-APK</strong> तैयार कर देगा।
-              </p>
-            </div>
-
-            {/* Included Directories */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-0.5">
-                ज़िप में सुरक्षित डायरेक्ट्री संरचना ({bundleFiles.length} फाइल्स)
-              </h4>
-              <div className="max-h-48 overflow-y-auto space-y-1 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 font-mono text-[11px] text-slate-300">
-                {loading ? (
-                  <div className="text-center py-4 text-slate-500">फाइलों की सूची लोड हो रही है...</div>
-                ) : (
-                  bundleFiles.map((file, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-slate-900 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileCode2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                        <span className="truncate text-slate-200">{file.path}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 font-mono shrink-0 ml-2">
-                        {(file.size / 1024).toFixed(1)} KB
-                      </span>
+            {showFileList && (
+              <div className="max-h-48 overflow-y-auto space-y-1 pt-2 border-t border-slate-800/80 text-[11px] font-mono text-slate-300">
+                {projectFiles.length > 0 ? (
+                  projectFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center space-x-2 px-2 py-1 rounded bg-slate-900/60 border border-slate-800/50">
+                      <span className="text-slate-500 w-5">{idx + 1}.</span>
+                      <span className="text-blue-300 truncate">{file}</span>
                     </div>
                   ))
+                ) : (
+                  <div className="text-slate-400">Loading files...</div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* Android APK Build Guide */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
+              <Smartphone className="w-4 h-4 text-emerald-400" />
+              <span>{t.buildingApk}</span>
+            </h4>
+
+            <div className="space-y-3 text-xs text-slate-300">
+              {/* Option 1: Android Studio */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="font-bold text-white block">
+                  {lang === 'hi' ? 'विधि 1: Android Studio से APK बनाएं' : 'Method 1: Android Studio (Local APK)'}
+                </span>
+                <p className="text-slate-400 text-[11px]">
+                  {lang === 'hi' ? 'ZIP निकालें और टर्मिनल में यह चलाएं:' : 'Extract ZIP, open terminal and run:'}
+                </p>
+                <div className="p-2.5 rounded-xl bg-black/70 font-mono text-slate-300 flex items-center justify-between border border-slate-800">
+                  <code className="truncate text-[11px]">npm install && npm run build && npx cap open android</code>
+                  <button
+                    onClick={() => copyCommand('npm install && npm run build && npx cap open android', 1)}
+                    className="ml-2 p-1 text-slate-400 hover:text-white"
+                    title="Copy command"
+                  >
+                    {copiedIndex === 1 ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Terminal className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {lang === 'hi' ? 'Android Studio में Build > Build APK पर क्लिक करें।' : 'In Android Studio, click Build > Build APK to generate your file.'}
+                </p>
+              </div>
+
+              {/* Option 2: Automatic GitHub Actions */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="font-bold text-white flex items-center space-x-1.5">
+                  <Github className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{lang === 'hi' ? 'विधि 2: GitHub Actions (ऑटोमेटिक, बिना किसी इंस्टॉलेशन के)' : 'Method 2: GitHub Actions (Automatic, No local tools)'}</span>
+                </span>
+                <p className="text-slate-400 text-[11px]">
+                  {lang === 'hi'
+                    ? 'प्रोजेक्ट को GitHub पर पुश करें। इसमें शामिल .github/workflows/build-apk.yml अपने आप APK बनाकर Releases में दे देता है!'
+                    : 'Push the project to GitHub. The included workflow builds and attaches the APK in GitHub Actions!'}
+                </p>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Tab 2: File Explorer & Direct Code Viewer */}
-        {activeTab === 'files' && (
-          <div className="flex-1 overflow-hidden flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
-            {/* File List Column */}
-            <div className="w-full sm:w-64 max-h-48 sm:max-h-none overflow-y-auto p-2 space-y-1 bg-slate-950/50 shrink-0 font-mono text-[11px]">
-              {bundleFiles.map((file, idx) => {
-                const isSelected = selectedFile?.path === file.path;
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedFile(file)}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                      isSelected
-                        ? 'bg-blue-600 text-white font-bold'
-                        : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                    }`}
-                  >
-                    <span className="truncate">{file.path}</span>
-                    <span className="text-[9px] opacity-70 ml-1">
-                      {(file.size / 1024).toFixed(1)}K
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Code Viewer Column */}
-            <div className="flex-1 flex flex-col min-h-0 bg-slate-950">
-              {selectedFile ? (
-                <>
-                  <div className="p-2.5 border-b border-slate-800 bg-slate-900/70 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="w-4 h-4 text-cyan-400 shrink-0" />
-                      <span className="text-xs font-mono font-bold text-white truncate">
-                        {selectedFile.path}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={handleCopyCode}
-                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-1"
-                      >
-                        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                        <span>{copied ? 'कॉपी हुआ!' : 'कॉपी'}</span>
-                      </button>
-                      <button
-                        onClick={() => handleDownloadSingleFile(selectedFile)}
-                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-blue-300 text-[11px] font-medium flex items-center gap-1"
-                      >
-                        <Download className="w-3 h-3" />
-                        <span>फाइल सेव करें</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <pre className="flex-1 overflow-auto p-3 text-[11px] font-mono text-slate-300 leading-relaxed bg-slate-950 select-text">
-                    <code>{selectedFile.content}</code>
-                  </pre>
-                </>
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-xs text-slate-500">
-                  किसी फाइल को देखने के लिए बाईं ओर क्लिक करें
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Modal Footer */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between gap-3 shrink-0">
+        {/* Modal Footer with Back Button */}
+        <div className="px-6 py-3.5 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between">
           <button
+            id="source-code-footer-back-btn"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
           >
-            बंद करें
+            <ArrowLeft className="w-3.5 h-3.5 text-indigo-400" />
+            <span>{t.backToHome}</span>
           </button>
 
           <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition-all active:scale-98"
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-colors cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>
-              {downloading
-                ? 'ज़िप तैयार की जा रही है...'
-                : 'संपूर्ण सोर्स कोड ZIP डाउनलोड करें (SharePro-SourceCode.zip)'}
-            </span>
+            {t.done}
           </button>
         </div>
       </div>
