@@ -1,87 +1,89 @@
-name: Build SharePro Android APK
+name: Unzip and Flatten Project
 
+# Trigger: whenever a .zip file is pushed/uploaded to the repo root (also
+# runnable manually from the Actions tab via "Run workflow").
 on:
   push:
-    branches: [ main, master ]
+    paths:
+      - '**.zip'
   workflow_dispatch:
 
+# Needed so this workflow's own commit/push back to the repo is allowed.
 permissions:
-  contents: read
-
-env:
-  NODE_VERSION: '24'
-  JAVA_VERSION: '17'
-  GRADLE_VERSION: '8.13'
-  ANDROID_PLATFORM: 'android-36'
-  ANDROID_BUILD_TOOLS: '36.0.0'
+  contents: write
 
 jobs:
-  build:
+  unzip:
+    name: Extract uploaded zip into repo root
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/checkout@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
+          fetch-depth: 0
 
-      - name: Set up JDK
-        uses: actions/setup-java@v6
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: temurin
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
-          accept-android-sdk-licenses: 'true'
-          log-accepted-android-sdk-licenses: 'false'
-
-      - name: Install Android SDK platform and build tools
-        shell: bash
+      - name: Extract every zip at repo root and flatten into root
         run: |
-          set -euo pipefail
-          sdkmanager "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}"
+          set -e
+          shopt -s nullglob
 
-      - name: Install web dependencies
-        run: npm install --no-audit --no-fund
+          # Exact filename of the project zip you upload to repo root.
+          # If you upload a zip with a different name later, this still
+          # works — it's just checked first, then any other *.zip is
+          # picked up automatically below.
+          KNOWN_ZIP="ESP32-Flasher-PROJECT-NO-GITHUB-FOLDER.zip"
 
-      - name: Verify source layout
-        run: npm run verify
+          zips=(*.zip)
+          if [ -f "$KNOWN_ZIP" ]; then
+            echo "Found known zip: $KNOWN_ZIP"
+          fi
 
-      - name: Type check
-        run: npm run typecheck
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "No .zip file found at repo root. Nothing to do."
+            exit 0
+          fi
 
-      - name: Build web app
-        run: npm run build
+          for zipfile in "${zips[@]}"; do
+            echo "=== Extracting: $zipfile ==="
+            tmpdir=$(mktemp -d)
+            unzip -o "$zipfile" -d "$tmpdir" > /dev/null
 
-      - name: Sync web assets into Android project
-        run: node scripts/sync-android.mjs
+            # If the zip has a single top-level wrapper folder (common with
+            # GitHub-style "project-main/" exports), descend into it so its
+            # *contents* land at repo root instead of the wrapper itself.
+            src="$tmpdir"
+            entries=("$tmpdir"/*)
+            if [ ${#entries[@]} -eq 1 ] && [ -d "${entries[0]}" ]; then
+              src="${entries[0]}"
+              echo "Detected single wrapper folder: $(basename "$src")"
+            fi
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: ${{ env.GRADLE_VERSION }}
+            # Copy everything into repo root EXCEPT .github — the default
+            # GITHUB_TOKEN this workflow runs with is never allowed to
+            # create/modify files under .github/workflows/, and a push that
+            # tries to will simply fail. Add/update workflow files manually
+            # instead (GitHub web UI: Add file > Create new file).
+            find "$src" -mindepth 1 -maxdepth 1 ! -name '.github' -exec cp -a -t . {} +
 
-      - name: Assemble debug APK
-        run: gradle -p android :app:assembleDebug --stacktrace --no-daemon
+            rm -rf "$tmpdir"
+            git rm -f "$zipfile" > /dev/null
+            echo "=== Done: $zipfile ==="
+          done
 
-      - name: Verify APK exists
-        shell: bash
+      - name: Commit and push extracted files
         run: |
-          set -euo pipefail
-          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sharepro-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+          # Belt-and-braces: never stage anything under .github, even if it
+          # somehow ended up on disk (e.g. a leftover from a previous run).
+          git add -A -- . ':!.github'
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "Auto-extract uploaded project zip"
+          git push
